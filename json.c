@@ -330,8 +330,8 @@ void partition_list_print_json (const rd_kafka_topic_partition_list_t *parts,
 
 
 
-void fmt_init_json (void) {
+void fmt_init_json (FILE *fp) {
 }
 
-void fmt_term_json (void) {
+void fmt_term_json (FILE *fp) {
 }

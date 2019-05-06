@@ -43,8 +43,20 @@ struct rd_kafka_metadata foo;"
     then
         mkl_allvar_set "json" ENABLE_JSON y
     fi
+
+    if [[ $WITH_PCAP == y ]]
+    then
+        mkl_allvar_set "pcap" ENABLE_PCAP y
+    fi
+
+    if [[ $WITH_WIRESHARK == y ]]
+    then
+        mkl_allvar_set "pcap" ENABLE_WIRESHARK y
+    fi
 }
 
 
 
 mkl_toggle_option "kafkacat" WITH_JSON --enable-json "JSON support (requires libyajl2)" y
+mkl_toggle_option "kafkacat" WITH_PCAP --enable-pcap "PCAP writing support" y
+mkl_toggle_option "kafkacat" WITH_WIRESHARK --enable-wireshark "Support running as a Wireshark extcap plugin" y

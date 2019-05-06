@@ -95,7 +95,7 @@ export CPPFLAGS="${CPPFLAGS:-} -Itmp-bootstrap/usr/local/include"
 export LIBS="$(pkg_cfg_lib rdkafka) $(pkg_cfg_lib yajl)"
 export STATIC_LIB_rdkafka="tmp-bootstrap/usr/local/lib/librdkafka.a"
 export STATIC_LIB_yajl="tmp-bootstrap/usr/local/lib/libyajl_s.a"
-./configure --enable-static --enable-json
+./configure --enable-static --enable-json --enable-pcap
 make
 
 echo ""

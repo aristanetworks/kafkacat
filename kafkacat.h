@@ -89,6 +89,31 @@ struct conf {
 #define CONF_F_APIVERREQ_USER 0x80 /* User set api.version.request */
 #define CONF_F_NO_CONF_SEARCH 0x100 /* Disable default config file search */
 #define CONF_F_BROKERS_SEEN 0x200 /* Brokers have been configured */
+
+#if ENABLE_PCAP
+#define CONF_F_FMT_PCAP 0x400 /* PCAP formatted output */
+        int pcap_flags;
+#define PCAP_FLAG_MICROSEC              0x1 /* Use microsecond resolution timestamps (rather than nanosecond) */
+#define PCAP_FLAG_PACKET_BUFFERED       0x2 /* Flush output after each packet */
+#define PCAP_FLAG_ADD_PACKET_HEADERS    0x4 /* Add packet headers per message (assumes one packet per kafka message) */
+#define PCAP_FLAG_METAMAKO_TRAILER      0x8 /* Assume metamako packet trailer, and extract timestamp */
+#define PCAP_FLAG_FILTER_VLAN1          0x10 /* Filter received packets based on provided VLAN 1 tags */
+#define PCAP_FLAG_FILTER_VLAN2          0x20 /* Filter received packets based on provided VLAN 2 tags */
+#define PCAP_FLAG_FILTER_PORT_ID        0x40 /* Filter received packets based on provided source port ids */
+#define PCAP_FLAG_FILTER_DEVICE_ID      0x80 /* Filter received packets based on provided source device ids */
+
+        int64_t  pkt_cnt;
+
+        int      num_vlan1;
+        int      num_vlan2;
+        int      num_port_ids;
+        int      num_device_ids;
+
+        uint16_t vlan1[100];
+        uint16_t vlan2[100];
+        uint8_t  port_ids[100];
+        uint16_t device_ids[100];
+#endif
         int     delim;
         int     key_delim;
 
@@ -111,6 +136,7 @@ struct conf {
         int64_t msg_cnt;
         char   *null_str;
         int     null_str_len;
+        FILE   *output;
 
         rd_kafka_conf_t       *rk_conf;
         rd_kafka_topic_conf_t *rkt_conf;
@@ -123,6 +149,19 @@ struct conf {
 
 extern struct conf conf;
 
+struct stats {
+        uint64_t tx;
+        uint64_t tx_err_q;
+        uint64_t tx_err_dr;
+        uint64_t tx_delivered;
+
+        uint64_t rx;
+#if ENABLE_PCAP
+        uint64_t rx_pkts;
+#endif
+};
+
+extern struct stats stats;
 
 void RD_NORETURN fatal0 (const char *func, int line,
                                        const char *fmt, ...);
@@ -149,8 +188,8 @@ void fmt_msg_output (FILE *fp, const rd_kafka_message_t *rkmessage);
 
 void fmt_parse (const char *fmt);
 
-void fmt_init (void);
-void fmt_term (void);
+void fmt_init (FILE *fp);
+void fmt_term (FILE *fp);
 
 
 
@@ -163,8 +202,36 @@ void metadata_print_json (const struct rd_kafka_metadata *metadata,
                           int32_t controllerid);
 void partition_list_print_json (const rd_kafka_topic_partition_list_t *parts,
                                 void *json_gen);
-void fmt_init_json (void);
-void fmt_term_json (void);
+void fmt_init_json (FILE *fp);
+void fmt_term_json (FILE *fp);
+
+#endif
+
+#if ENABLE_PCAP
+/*
+ * pcap.c
+ */
+
+void fmt_init_pcap (FILE *fp);
+void fmt_term_pcap (FILE *fp);
+void fmt_msg_output_pcap (FILE *fp, const rd_kafka_message_t *rkmessage);
+void parse_pcap_args(char *arglist);
+void parse_vlan1_args(char *arglist);
+void parse_vlan2_args(char *arglist);
+void parse_port_id_args(char *arglist);
+void parse_device_id_args(char *arglist);
+
+
+#if ENABLE_WIRESHARK
+/*
+ * wireshark.c
+ */
+
+void extcap_interfaces (void);
+void extcap_dlts (const char *iface);
+void extcap_config (const char *iface);
+
+#endif
 
 #endif
 

@@ -27,6 +27,7 @@
  */
 
 #ifndef _MSC_VER
+#include <getopt.h>
 #include <unistd.h>
 #include <syslog.h>
 #include <sys/time.h>
@@ -59,17 +60,11 @@ struct conf conf = {
         .msg_size = 1024*1024,
         .null_str = "NULL",
         .fixed_key = NULL,
+        .flags = CONF_F_NO_CONF_SEARCH,
+        .output = NULL,
 };
 
-static struct stats {
-        uint64_t tx;
-        uint64_t tx_err_q;
-        uint64_t tx_err_dr;
-        uint64_t tx_delivered;
-
-        uint64_t rx;
-} stats;
-
+struct stats stats;
 
 /* Partition's at EOF state array */
 int *part_eof = NULL;
@@ -999,6 +994,28 @@ static void RD_NORETURN usage (const char *argv0, int exitcode,
 #if ENABLE_JSON
                 "  -J                 Output with JSON envelope\n"
 #endif
+#if ENABLE_PCAP
+                "  --pcap[=opts]      Output with PCAP envelope\n"
+                "                     [opts] is a comma separated list of:\n"
+                "                       microsecond  Emit a us-precision pcap (default:ns)\n"
+                "                       pbuffered  One packet per kafka message\n"
+                "                       add_packet_headers  Requires the pbuffered option\n"
+                "                       metamako Extract timestamp from packet trailer\n"
+                "\n"
+                "  --num-pkts=cnt    Exit after receiving this number of valid packets"
+                "\n"
+                "  --vlan1=vlans     Only output packets from given list of vlans (max 100)\n"
+                "                       comma separated list of vlans to match for vlan1\n"
+                "\n"
+                "  --vlan2=vlans     Only output packets from given list of vlans (max 100)\n"
+                "                       comma separated list of vlans to match for vlan2\n"
+                "\n"
+                "  --port-id=ids     Only output packets from given list of source port ids (max 100)\n"
+                "                       comma separated list of port ids to match (requires metamako trailer)\n"
+                "\n"
+                "  --device-id=ids   Only output packets from given list of device ids (max 100)\n"
+                "                       comma separated list of device ids to match (requires metamako trailer)\n"
+#endif
                 "  -D <delim>         Delimiter to separate messages on output\n"
                 "  -K <delim>         Print message keys prefixing the message\n"
                 "                     with specified delimiter.\n"
@@ -1428,14 +1445,101 @@ static void argparse (int argc, char **argv,
         char tmp_fmt[64];
         int do_conf_dump = 0;
         int conf_files_read = 0;
+        int unbuffered = 0;
+#if ENABLE_PCAP
+        int pcap = 0;
+        int num_pkts = 0;
+        int vlan1 = 0;
+        int vlan2 = 0;
+        int port_id = 0;
+        int device_id = 0;
+#if ENABLE_WIRESHARK
+        int extcap_action = 0;
+        int extcap_option = 0;
+        char excap_interface[512] = {0};
+#endif
+#endif
 
-        while ((opt = getopt(argc, argv,
-                             "PCG:LQt:p:b:z:o:eED:K:k:H:Od:qvF:X:c:Tuf:ZlVh"
+        struct option longopts[] = {
+#if ENABLE_PCAP
+             { "pcap",  optional_argument,  &pcap,  1 },
+             { "num-pkts",  required_argument,  &num_pkts,  1 },
+             { "vlan1",  required_argument,  &vlan1,  1 },
+             { "vlan2",  required_argument,  &vlan2,  1 },
+             { "port-id",  required_argument,  &port_id,  1 },
+             { "device-id",  required_argument,  &device_id,  1 },
+#if ENABLE_WIRESHARK
+             { "extcap-interfaces", no_argument, &extcap_action, 1 },
+             { "extcap-dlts",       no_argument, &extcap_action, 2 },
+             { "extcap-config",     no_argument, &extcap_action, 3 },
+             { "capture",           no_argument, &extcap_action, 4 },
+
+             { "extcap-interface",   required_argument, &extcap_option, 1 },
+             { "extcap-mmtrailer",   no_argument, &extcap_option, 2 },
+             { "extcap-pbuffered",   no_argument, &extcap_option, 3 },
+             { "extcap-add-headers", no_argument, &extcap_option, 4 },
+             { "fifo",               required_argument, NULL, 'w' },
+#endif
+#endif
+             { NULL,    0,           NULL,   0 }
+        };
+
+        while ((opt = getopt_long(argc, argv,
+                             "PCG:LQt:p:b:z:o:w:eED:K:k:H:Od:qvF:X:c:Tuf:ZlVh"
 #if ENABLE_JSON
                              "J"
 #endif
-                        )) != -1) {
+                        , longopts, NULL)) != -1) {
                 switch (opt) {
+                case 0:
+#if ENABLE_PCAP
+                        if (pcap) {
+                            if (optarg)
+                                parse_pcap_args(optarg);
+                            pcap = 0;
+                        }
+
+                        if (num_pkts) {
+                            conf.pkt_cnt = strtoll(optarg, NULL, 10);
+                            num_pkts = 0;
+                        }
+
+                        if (vlan1) {
+                            parse_vlan1_args(optarg);
+                            vlan1 = 0;
+                        }
+
+                        if (vlan2) {
+                            parse_vlan2_args(optarg);
+                            vlan2 = 0;
+                        }
+
+                        if (port_id) {
+                            parse_port_id_args(optarg);
+                            port_id = 0;
+                        }
+
+                        if (device_id) {
+                            parse_device_id_args(optarg);
+                            device_id = 0;
+                        }
+#if ENABLE_WIRESHARK
+                        if (extcap_option == 1) {
+                            strncpy(excap_interface, optarg, sizeof(excap_interface));
+                            extcap_option = 0;
+                        } else if (extcap_option == 2) {
+                            conf.pcap_flags |= PCAP_FLAG_METAMAKO_TRAILER;
+                            extcap_option = 0;
+                        } else if (extcap_option == 3) {
+                            conf.pcap_flags |= PCAP_FLAG_PACKET_BUFFERED;
+                            extcap_option = 0;
+                        } else if (extcap_option == 4) {
+                            conf.pcap_flags |= PCAP_FLAG_ADD_PACKET_HEADERS;
+                            extcap_option = 0;
+                        }
+#endif
+#endif
+                        break;
                 case 'P':
                 case 'C':
                 case 'L':
@@ -1547,7 +1651,14 @@ static void argparse (int argc, char **argv,
                         conf.flags |= CONF_F_TEE;
                         break;
                 case 'u':
-                        setbuf(stdout, NULL);
+                        unbuffered = 1;
+                        break;
+                case 'w':
+                        conf.output = fopen(optarg, "w");
+                        if (!conf.output) {
+                                perror(optarg);
+                                exit(1);
+                        }
                         break;
                 case 'F':
                         conf.flags |= CONF_F_NO_CONF_SEARCH;
@@ -1604,6 +1715,35 @@ static void argparse (int argc, char **argv,
                 }
         }
 
+#if ENABLE_PCAP
+#if ENABLE_WIRESHARK
+        if (extcap_action==1) {
+            extcap_interfaces();
+            exit(0);
+        }
+        if (extcap_action==2) {
+            if (excap_interface[0] == 0)
+                KC_FATAL("An interface name is required with --extcap-dlts");
+            extcap_dlts(excap_interface);
+            exit(0);
+        }
+
+        if (extcap_action==3) {
+            extcap_config(excap_interface);
+            exit(0);
+        }
+
+        // set things up to play nice under wireshark
+        if (extcap_action==4) {
+            // capture implies consumer mode
+            conf.mode = 'C';
+            conf.flags |= CONF_F_FMT_PCAP;
+            // prints to stderr make wireshark show error screens
+            conf.verbosity--;
+        }
+#endif
+#endif
+
         if (conf_files_read == 0) {
                 const char *cpath = kc_getenv("KAFKACAT_CONFIG");
                 if (cpath) {
@@ -1614,6 +1754,12 @@ static void argparse (int argc, char **argv,
 
         if (!(conf.flags & CONF_F_NO_CONF_SEARCH))
                 read_default_conf_files();
+
+        if (conf.output == NULL)
+                conf.output = stdout;
+
+        if (unbuffered)
+                setbuf(conf.output, NULL);
 
         /* Dump configuration and exit, if so desired. */
         if (do_conf_dump) {
@@ -1648,7 +1794,7 @@ static void argparse (int argc, char **argv,
 
         rd_kafka_conf_set_error_cb(conf.rk_conf, error_cb);
 
-        fmt_init();
+        fmt_init(conf.output);
 
 
         if (strchr("GC", conf.mode)) {
@@ -1677,8 +1823,8 @@ static void argparse (int argc, char **argv,
 
         } else if (conf.mode == 'P') {
                 conf.delim = parse_delim(delim);
-		if (conf.flags & CONF_F_KEY_DELIM)
-			conf.key_delim = parse_delim(key_delim);
+                    if (conf.flags & CONF_F_KEY_DELIM)
+                        conf.key_delim = parse_delim(key_delim);
         }
 
         /* Automatically enable API version requests if needed and
@@ -1692,14 +1838,12 @@ static void argparse (int argc, char **argv,
 }
 
 
-
-
 int main (int argc, char **argv) {
 #ifdef SIGIO
-	char tmp[16];
+        char tmp[16];
 #endif
         FILE *in = stdin;
-	struct timeval tv;
+        struct timeval tv;
         rd_kafka_topic_partition_list_t *rktparlist = NULL;
 
         signal(SIGINT, term);
@@ -1732,7 +1876,7 @@ int main (int argc, char **argv) {
         /* Parse command line arguments */
         argparse(argc, argv, &rktparlist);
 
-        if (optind < argc) {
+        if (optind < argc && argv[optind][0] != 0) {
                 if (!strchr("PG", conf.mode))
                         usage(argv[0], 1,
                               "file/topic list only allowed in "
@@ -1751,12 +1895,12 @@ int main (int argc, char **argv) {
         switch (conf.mode)
         {
         case 'C':
-                consumer_run(stdout);
+                consumer_run(conf.output);
                 break;
 
 #if ENABLE_KAFKACONSUMER
         case 'G':
-                kafkaconsumer_run(stdout, &argv[optind], argc-optind);
+                kafkaconsumer_run(conf.output, &argv[optind], argc-optind);
                 break;
 #endif
 
@@ -1792,7 +1936,7 @@ int main (int argc, char **argv) {
 
         rd_kafka_wait_destroyed(5000);
 
-        fmt_term();
+        fmt_term(conf.output);
 
         exit(conf.exitcode);
 }

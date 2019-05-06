@@ -165,20 +165,28 @@ void fmt_parse (const char *fmt) {
 }
 
 
-
-
-void fmt_init (void) {
+void fmt_init (FILE *fp) {
+#ifdef ENABLE_PCAP
+        if (conf.flags & CONF_F_FMT_PCAP)
+                fmt_init_pcap(fp);
+#endif
 #ifdef ENABLE_JSON
         if (conf.flags & CONF_F_FMT_JSON)
-                fmt_init_json();
+                fmt_init_json(fp);
 #endif
 }
 
-void fmt_term (void) {
+void fmt_term (FILE *fp) {
+#ifdef ENABLE_PCAP
+        if (conf.flags & CONF_F_FMT_PCAP)
+                fmt_term_pcap(fp);
+#endif
 #ifdef ENABLE_JSON
         if (conf.flags & CONF_F_FMT_JSON)
-                fmt_term_json();
+                fmt_term_json(fp);
 #endif
+        if (fp != stdout)
+                fclose(fp);
 }
 
 
@@ -319,6 +327,11 @@ static void fmt_msg_output_str (FILE *fp,
  */
 void fmt_msg_output (FILE *fp, const rd_kafka_message_t *rkmessage) {
 
+#ifdef ENABLE_PCAP
+        if (conf.flags & CONF_F_FMT_PCAP)
+                fmt_msg_output_pcap(fp, rkmessage);
+        else
+#endif
 #ifdef ENABLE_JSON
         if (conf.flags & CONF_F_FMT_JSON)
                 fmt_msg_output_json(fp, rkmessage);
