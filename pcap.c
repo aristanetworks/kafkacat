@@ -207,7 +207,7 @@ static void process_packet_buffered(FILE *fp, const rd_kafka_message_t *rkmessag
         pkt.header->usec /= 1000;
 
     wrote = fwrite(pkt.header, sizeof(pcap_packet_header_t), 1, fp);
-    wrote |= fwrite(pkt.payload, pkt.header->caplen, 1, fp);
+    wrote &= fwrite(pkt.payload, pkt.header->caplen, 1, fp);
     if (unlikely(wrote != 1))
         KC_FATAL("Output write error: %s", strerror(errno));
 
@@ -248,18 +248,20 @@ static void process(FILE *fp, const rd_kafka_message_t *rkmessage) {
 
 exclude:
         if (exclude) {
-            if (len > 0){
-                iov[iovcnt].iov_len = len;
+            if (len) {
+                iov[iovcnt++].iov_len = len;
                 len = 0;
-                iovcnt++;
             }
             iov[iovcnt].iov_base = (void *)((uintptr_t)rkmessage->payload + i);
         }
     }
-    iov[iovcnt++].iov_len = len;
 
-    if (unlikely(writev(fileno(fp), iov, iovcnt) < 0))
-        KC_FATAL("Output write error: %s", strerror(errno));
+    if (len)
+        iov[iovcnt++].iov_len = len;
+
+    if (iovcnt)
+        if (unlikely(writev(fileno(fp), iov, iovcnt) < 0))
+            KC_FATAL("Output write error: %s", strerror(errno));
 }
 
 
