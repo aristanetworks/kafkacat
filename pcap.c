@@ -26,6 +26,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#define __need_IOV_MAX
+
 #include "kafkacat.h"
 #include "pcap.h"
 
@@ -217,7 +219,7 @@ static void process_packet_buffered(FILE *fp, const rd_kafka_message_t *rkmessag
 
 static void process(FILE *fp, const rd_kafka_message_t *rkmessage) {
     unsigned int i = 0, exclude = 0,  len = 0, iovcnt = 0;
-    struct iovec iov[rkmessage->len/64];
+    struct iovec iov[IOV_MAX];
     packet_t pkt;
 
     iov[iovcnt].iov_base = rkmessage->payload;
@@ -251,6 +253,11 @@ exclude:
             if (len) {
                 iov[iovcnt++].iov_len = len;
                 len = 0;
+                if (iovcnt == IOV_MAX) {
+                    if (unlikely(writev(fileno(fp), iov, iovcnt) < 0))
+                        KC_FATAL("Output write error: %s", strerror(errno));
+                    iovcnt = 0;
+                }
             }
             iov[iovcnt].iov_base = (void *)((uintptr_t)rkmessage->payload + i);
         }
