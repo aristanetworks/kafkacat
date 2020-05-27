@@ -997,7 +997,6 @@ static void RD_NORETURN usage (const char *argv0, int exitcode,
 #if ENABLE_PCAP
                 "  --pcap[=opts]      Output with PCAP envelope\n"
                 "                     [opts] is a comma separated list of:\n"
-                "                       microsecond  Emit a us-precision pcap (default:ns)\n"
                 "                       pbuffered  One packet per kafka message\n"
                 "                       add_packet_headers  Requires the pbuffered option\n"
                 "                       metamako Extract timestamp from packet trailer\n"
@@ -1852,9 +1851,9 @@ int main (int argc, char **argv) {
         signal(SIGPIPE, term);
 #endif
 
-	/* Seed rng for random partitioner, jitter, etc. */
-	rd_gettimeofday(&tv, NULL);
-	srand(tv.tv_usec);
+        /* Seed rng for random partitioner, jitter, etc. */
+        rd_gettimeofday(&tv, NULL);
+        srand(tv.tv_usec);
 
         /* Create config containers */
         conf.rk_conf  = rd_kafka_conf_new();

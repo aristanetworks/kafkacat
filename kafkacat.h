@@ -93,7 +93,7 @@ struct conf {
 #if ENABLE_PCAP
 #define CONF_F_FMT_PCAP 0x400 /* PCAP formatted output */
         int pcap_flags;
-#define PCAP_FLAG_MICROSEC              0x1 /* Use microsecond resolution timestamps (rather than nanosecond) */
+#define PCAP_FLAG_UNUSED                0x1 /* Unused */
 #define PCAP_FLAG_PACKET_BUFFERED       0x2 /* Flush output after each packet */
 #define PCAP_FLAG_ADD_PACKET_HEADERS    0x4 /* Add packet headers per message (assumes one packet per kafka message) */
 #define PCAP_FLAG_METAMAKO_TRAILER      0x8 /* Assume metamako packet trailer, and extract timestamp */

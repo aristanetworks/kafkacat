@@ -42,7 +42,7 @@ typedef struct pcap_hdr_s {
 
 typedef struct pcaprec_hdr_s {
         uint32_t sec;
-        uint32_t usec;   // actually nanoseconds with appropriate magic number
+        uint32_t nsec;
         uint32_t caplen;
         uint32_t wirelen;
 } pcap_packet_header_t;

@@ -33,6 +33,7 @@
 
 #include <assert.h>
 #include <string.h>
+#include <time.h>
 
 #include <arpa/inet.h>
 #include <sys/time.h>
@@ -53,10 +54,7 @@ void fmt_init_pcap (FILE *fp) {
         .dlt = 1,               // LINKTYPE_ETHERNET
     };
 
-    if (conf.pcap_flags & PCAP_FLAG_MICROSEC)
-        header.magic = 0xa1b2c3d4; // microsecond magic
-    else
-        header.magic = 0xa1b23c4d; // nanosecond magic
+    header.magic = 0xa1b23c4d; // nanosecond magic
 
     int wrote = fwrite(&header, sizeof(header), 1, fp);
     if (wrote != 1)
@@ -78,16 +76,16 @@ static void get_timestamp(const rd_kafka_message_t *rkmessage, pcap_packet_heade
     int64_t ts_millisecond = rd_kafka_message_timestamp(rkmessage, &tstype);
     if (tstype != RD_KAFKA_TIMESTAMP_NOT_AVAILABLE) {
         hdr->sec = (ts_millisecond / 1000);
-        hdr->usec = (ts_millisecond % 1000) * 1000000; // convert milli -> nano
+        hdr->nsec = (ts_millisecond % 1000) * 1000000; // convert milli -> nano
     } else
 #else
 #warning Fallthrough to local timestamping
 #endif
     {
-        struct timeval tv;
-        gettimeofday(&tv, NULL);
-        hdr->sec = tv.tv_sec,
-        hdr->usec = tv.tv_usec * 1000;
+        struct timespec ts;
+        clock_gettime(CLOCK_REALTIME_COARSE, &ts);
+        hdr->sec = (uint32_t) ts.tv_sec;
+        hdr->nsec = (uint32_t) ts.tv_nsec;
     }
 }
 
@@ -143,7 +141,7 @@ static void extract_trailer_info(packet_t *pkt) {
     pkt->trailer.sec = ntohl(*(uint32_t*)pkt->trailer.base);
     pkt->trailer.nsec = ntohl(*(uint32_t*)(pkt->trailer.base+4));
     pkt->header->sec = pkt->trailer.sec;
-    pkt->header->usec = pkt->trailer.nsec;
+    pkt->header->nsec = pkt->trailer.nsec;
     pkt->trailer.port_id = *(uint8_t*)(pkt->trailer.base+11);
     pkt->trailer.device_id = ntohs(*(uint16_t*)(pkt->trailer.base+9));
 }
@@ -204,9 +202,6 @@ static void process_packet_buffered(FILE *fp, const rd_kafka_message_t *rkmessag
     if (conf.pcap_flags & PCAP_FLAG_METAMAKO_TRAILER)
         if(process_metamako_trailer(&pkt))
             return;
-
-    if (conf.pcap_flags & PCAP_FLAG_MICROSEC)
-        pkt.header->usec /= 1000;
 
     wrote = fwrite(pkt.header, sizeof(pcap_packet_header_t), 1, fp);
     wrote &= fwrite(pkt.payload, pkt.header->caplen, 1, fp);
@@ -290,9 +285,7 @@ void parse_pcap_args(char *arglist) {
     char *t = strtok_r(arglist, ",", &state);
     while (t != NULL)
     {
-        if (strcmp(t, "microsecond") == 0)
-            conf.pcap_flags |= PCAP_FLAG_MICROSEC;
-        else if (strcmp(t, "pbuffered") == 0)
+        if (strcmp(t, "pbuffered") == 0)
             conf.pcap_flags |= PCAP_FLAG_PACKET_BUFFERED;
         else if (strcmp(t, "add_packet_headers") == 0)
             conf.pcap_flags |= PCAP_FLAG_ADD_PACKET_HEADERS;
