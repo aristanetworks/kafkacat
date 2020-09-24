@@ -279,7 +279,6 @@ void fmt_msg_output_pcap (FILE *fp, const rd_kafka_message_t *rkmessage) {
 
 void parse_pcap_args(char *arglist) {
     conf.flags |= CONF_F_FMT_PCAP;
-    conf.pcap_flags = 0;
 
     char *state;
     char *t = strtok_r(arglist, ",", &state);
