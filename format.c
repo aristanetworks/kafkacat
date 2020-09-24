@@ -28,10 +28,6 @@
 
 #include "kafkacat.h"
 
-#ifndef _MSC_VER
-#include <arpa/inet.h>  /* for htonl() */
-#endif
-
 static void fmt_add (fmt_type_t type, const char *str, int len) {
         if (conf.fmt_cnt == KC_FMT_MAX_SIZE)
                 KC_FATAL("Too many formatters & strings (KC_FMT_MAX_SIZE=%i)",

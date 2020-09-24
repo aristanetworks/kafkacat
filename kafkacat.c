@@ -26,31 +26,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef _MSC_VER
-#include <getopt.h>
-#include <unistd.h>
-#include <syslog.h>
-#include <sys/time.h>
-#include <sys/mman.h>
-#else
-#pragma comment(lib, "ws2_32.lib")
-#include "win32/wingetopt.h"
-#include <io.h>
-#endif
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdarg.h>
-#include <signal.h>
-#include <ctype.h>
-
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-
-
-
 #include "kafkacat.h"
-
 
 struct conf conf = {
         .run = 1,

@@ -26,19 +26,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#define __need_IOV_MAX
-
-#include "kafkacat.h"
 #include "pcap.h"
-
-#include <assert.h>
-#include <string.h>
-#include <time.h>
-
-#include <arpa/inet.h>
-#include <sys/time.h>
-#include <sys/uio.h>
-
 
 void fmt_init_pcap (FILE *fp) {
     // FIXME: is there a better place for these sanity checks? Configure/compile time?

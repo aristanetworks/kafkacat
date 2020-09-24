@@ -25,23 +25,46 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+
 #pragma once
 
-#include <inttypes.h>
+#define __need_IOV_MAX
+
+#ifndef _MSC_VER
+#include "config.h"
+#include <arpa/inet.h>  /* for htonl() */
+#include <getopt.h>
+#include <syslog.h>
+#include <sys/mman.h>
+#include <sys/time.h>
+#include <sys/uio.h>
+#include <unistd.h>
+#else
+#pragma comment(lib, "librdkafka.lib")
+#pragma comment(lib, "ws2_32.lib")
+#include "win32/win32_config.h"
+#include "win32/wingetopt.h"
+#include <io.h>
+#endif
+
+#include <assert.h>
+#include <ctype.h>
 #include <errno.h>
-#include <string.h>
+#include <fcntl.h>
+#include <inttypes.h>
+#include <limits.h>
+#include <signal.h>
+#include <stdarg.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <time.h>
 
 #include <librdkafka/rdkafka.h>
 
 #include "rdport.h"
-
-#ifdef _MSC_VER
-#pragma comment(lib, "librdkafka.lib")
-#include "win32/win32_config.h"
-#else
-#include "config.h"
-#endif
 
 #ifdef RD_KAFKA_V_HEADER
 #define HAVE_HEADERS 1
@@ -55,6 +78,12 @@
 #define HAVE_CONTROLLERID 0
 #endif
 
+#ifndef IOV_MAX
+#define IOV_MAX 1024
+#endif
+
+#define likely(x)       __builtin_expect(!!(x), 1)
+#define unlikely(x)     __builtin_expect(!!(x), 0)
 
 typedef enum {
         KC_FMT_STR,
