@@ -31,8 +31,8 @@
 #include <yajl/yajl_gen.h>
 
 #define JS_STR(G, STR) do {                                             \
-        const char *_s = (STR);                                         \
-        yajl_gen_string(G, (const unsigned char *)_s, strlen(_s));      \
+                const char *_s = (STR);                                 \
+                yajl_gen_string(G, (const unsigned char *)_s, strlen(_s)); \
         } while (0)
 
 void fmt_msg_output_json (FILE *fp, const rd_kafka_message_t *rkmessage) {
@@ -69,6 +69,18 @@ void fmt_msg_output_json (FILE *fp, const rd_kafka_message_t *rkmessage) {
                         yajl_gen_integer(g, (long long int)ts);
                 }
         }
+#else
+        JS_STR(g, "tstype");
+        JS_STR(g, "unknown");
+        JS_STR(g, "ts");
+        yajl_gen_integer(g, 0);
+#endif
+
+        JS_STR(g, "broker");
+#if RD_KAFKA_VERSION >= 0x010500ff
+        yajl_gen_integer(g, (int)rd_kafka_message_broker_id(rkmessage));
+#else
+        yajl_gen_integer(g, -1);
 #endif
 
 
@@ -101,17 +113,66 @@ void fmt_msg_output_json (FILE *fp, const rd_kafka_message_t *rkmessage) {
 
 
         JS_STR(g, "key");
-        if (rkmessage->key)
-                yajl_gen_string(g, (const unsigned char *)rkmessage->key,
-                                rkmessage->key_len);
-        else
+        if (rkmessage->key) {
+#if ENABLE_AVRO && YAJL_HAS_GEN_VERBATIM
+                if (conf.flags & CONF_F_FMT_AVRO_KEY) {
+                        char errstr[256];
+                        char *json = kc_avro_to_json(
+                                rkmessage->key,
+                                rkmessage->key_len,
+                                errstr, sizeof(errstr));
+
+                        if (!json) {
+                                KC_ERROR("Failed to deserialize key in "
+                                         "message in %s [%"PRId32"] at "
+                                         "offset %"PRId64": %s",
+                                         rd_kafka_topic_name(rkmessage->rkt),
+                                         rkmessage->partition,
+                                         rkmessage->offset, errstr);
+                                yajl_gen_null(g);
+                                JS_STR(g, "key_error");
+                                JS_STR(g, errstr);
+                        } else
+                                yajl_gen_verbatim(g, json, strlen(json));
+                        free(json);
+                } else
+#endif
+                        yajl_gen_string(g,
+                                        (const unsigned char *)rkmessage->key,
+                                        rkmessage->key_len);
+        } else
                 yajl_gen_null(g);
 
         JS_STR(g, "payload");
-        if (rkmessage->payload)
-                yajl_gen_string(g, (const unsigned char *)rkmessage->payload,
-                                rkmessage->len);
-        else
+        if (rkmessage->payload) {
+#if ENABLE_AVRO && YAJL_HAS_GEN_VERBATIM
+                if (conf.flags & CONF_F_FMT_AVRO_VALUE) {
+                        char errstr[256];
+                        char *json = kc_avro_to_json(
+                                rkmessage->payload,
+                                rkmessage->len,
+                                errstr, sizeof(errstr));
+
+                        if (!json) {
+                                KC_ERROR("Failed to deserialize value in "
+                                         "message in %s [%"PRId32"] at "
+                                         "offset %"PRId64": %s",
+                                         rd_kafka_topic_name(rkmessage->rkt),
+                                         rkmessage->partition,
+                                         rkmessage->offset, errstr);
+                                yajl_gen_null(g);
+                                JS_STR(g, "payload_error");
+                                JS_STR(g, errstr);
+                        } else
+                                yajl_gen_verbatim(g, json, strlen(json));
+                        free(json);
+                } else
+#endif
+                        yajl_gen_string(g,
+                                        (const unsigned char *)
+                                        rkmessage->payload,
+                                        rkmessage->len);
+        } else
                 yajl_gen_null(g);
 
         yajl_gen_map_close(g);
@@ -334,4 +395,13 @@ void fmt_init_json (FILE *fp) {
 }
 
 void fmt_term_json (FILE *fp) {
+}
+
+
+int json_can_emit_verbatim (void) {
+#if YAJL_HAS_GEN_VERBATIM
+        return 1;
+#else
+        return 0;
+#endif
 }
